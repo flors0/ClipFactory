@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from app.core.models import ProjectData
@@ -55,7 +56,10 @@ class TimelineBuilder:
             project_name=project.project_name,
             preset_id=project.preset_id,
             preset_config=preset_config,
-            output_path=Path("data/output") / f"{project.project_name}_{project.preset_id}.mp4",
+            output_path=self._build_safe_output_path(
+                project_name=project.project_name,
+                preset_id=project.preset_id,
+            ),
             segments=segments,
         )
 
@@ -91,3 +95,34 @@ class TimelineBuilder:
             caption="",
             show_ranking_overlay=False,
         )
+
+    def _build_safe_output_path(
+        self,
+        project_name: str,
+        preset_id: str,
+    ) -> Path:
+        output_dir = Path("data/output")
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        safe_project_name = self._safe_filename_part(project_name) or "clipfactory_project"
+        safe_preset_id = self._safe_filename_part(preset_id) or "preset"
+
+        base_name = f"{safe_project_name}_{safe_preset_id}"
+        candidate = output_dir / f"{base_name}.mp4"
+
+        if not candidate.exists():
+            return candidate
+
+        for counter in range(1, 10_000):
+            numbered_candidate = output_dir / f"{base_name}_{counter:03d}.mp4"
+
+            if not numbered_candidate.exists():
+                return numbered_candidate
+
+        raise RuntimeError("Konnte keinen freien Output-Dateinamen erzeugen.")
+
+    def _safe_filename_part(self, value: str) -> str:
+        cleaned = value.strip().lower()
+        cleaned = re.sub(r"[^a-z0-9_-]+", "_", cleaned)
+        cleaned = cleaned.strip("_")
+        return cleaned
