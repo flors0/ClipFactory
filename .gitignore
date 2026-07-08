@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+.uv/
+.pytest_cache/
+
+# Environment
+.env
+*.env
+
+# ClipFactory generated data
+data/downloads/
+data/output/
+data/temp/
+data/projects/
+
+# User assets / large media
+assets/memes/
+assets/music/
+assets/sfx/
+assets/transitions/*.mp4
+assets/transitions/*.mov
+assets/transitions/*.webm
+
+# OS / IDE
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
