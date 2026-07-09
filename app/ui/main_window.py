@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.assets.asset_library import AssetLibraryManager
 from app.analyze.render_plan_analyzer import RenderPlanAnalyzer
 from app.core.models import ClipSlot, ProjectData, SourceInput
 from app.download.source_resolver import SourceResolveError, SourceResolver
@@ -59,6 +60,9 @@ class MainWindow(QMainWindow):
         self.preset_settings_button = QPushButton("Preset Settings")
         self.preset_settings_button.clicked.connect(self._open_preset_settings)
 
+        self.refresh_asset_library_button = QPushButton("Refresh Asset Library")
+        self.refresh_asset_library_button.clicked.connect(self._refresh_asset_library)
+
         self.render_video_button = QPushButton("Render Video")
         self.render_video_button.clicked.connect(self._render_video)
 
@@ -76,6 +80,7 @@ class MainWindow(QMainWindow):
         top_layout.addWidget(self.add_preset_button)
         top_layout.addWidget(self.delete_preset_button)
         top_layout.addWidget(self.preset_settings_button)
+        top_layout.addWidget(self.refresh_asset_library_button)
         top_layout.addWidget(self.render_video_button)
         top_layout.addWidget(self.render_all_button)
         top_layout.addWidget(self.open_output_button)
@@ -367,6 +372,20 @@ class MainWindow(QMainWindow):
             QUrl.fromLocalFile(str(output_dir.resolve()))
         )
 
+    def _refresh_asset_library(self) -> None:
+        self._log("Refreshing asset library...")
+
+        try:
+            library = AssetLibraryManager().refresh()
+        except Exception as error:
+            self._log(f"Asset library refresh failed: {error}")
+            return
+
+        for line in library.to_log_lines():
+            self._log(line)
+
+        self._log("Asset library refreshed: data/asset_library.json")
+
     def _collect_project_data(self, preset_id: str | None = None) -> ProjectData:
         slots: list[ClipSlot] = []
 
@@ -474,6 +493,7 @@ class MainWindow(QMainWindow):
         self.add_preset_button.setEnabled(enabled)
         self.delete_preset_button.setEnabled(enabled)
         self.preset_settings_button.setEnabled(enabled)
+        self.refresh_asset_library_button.setEnabled(enabled)
 
     def _render_video(self) -> None:
         self._set_render_buttons_enabled(False)
