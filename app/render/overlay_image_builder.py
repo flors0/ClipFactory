@@ -4,18 +4,19 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from app.core.preset_config import RankingOverlayConfig
+from app.core.preset_config import HeaderOverlayConfig, PresetConfig, RankingOverlayConfig
 from app.core.render_plan import RenderSegment
 
 
 class OverlayImageBuilder:
     """
-    Creates transparent PNG overlays for ranking videos.
+    Builds transparent overlay images.
 
-    Behavior:
-    - all ranking numbers are visible from the start
-    - captions reveal progressively
-    - visual style comes from the preset config
+    Supported modules:
+    - Header Overlay
+    - Ranking Overlay
+
+    Both can be enabled at the same time.
     """
 
     def __init__(
@@ -26,18 +27,145 @@ class OverlayImageBuilder:
         self.width = width
         self.height = height
 
-    def build_ranking_overlay(
+    def build_segment_overlay(
         self,
         output_path: Path,
         ranked_segments: list[RenderSegment],
-        style: RankingOverlayConfig,
-        current_rank_index: int | None = None,
+        current_segment: RenderSegment,
+        preset_config: PresetConfig,
     ) -> Path:
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         image = Image.new("RGBA", (self.width, self.height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(image)
 
+        if preset_config.header_overlay.enabled:
+            self._draw_header_overlay(
+                draw=draw,
+                style=preset_config.header_overlay,
+            )
+
+        if (
+            preset_config.ranking_overlay.enabled
+            and current_segment.show_ranking_overlay
+        ):
+            self._draw_ranking_overlay(
+                draw=draw,
+                ranked_segments=ranked_segments,
+                style=preset_config.ranking_overlay,
+                header_style=preset_config.header_overlay,
+                current_rank_index=current_segment.rank_index,
+            )
+
+        image.save(output_path)
+        return output_path
+
+    def _draw_header_overlay(
+        self,
+        draw: ImageDraw.ImageDraw,
+        style: HeaderOverlayConfig,
+    ) -> None:
+        if not style.text.strip():
+            return
+
+        background_color = self._hex_to_rgba(
+            style.background_color,
+            alpha=max(0, min(style.background_opacity, 255)),
+        )
+
+        draw.rectangle(
+            (0, 0, self.width, style.bar_height),
+            fill=background_color,
+        )
+
+        font = self._load_font(
+            size=style.font_size,
+            bold=style.bold,
+            custom_font_path=style.font_path,
+        )
+
+        words = style.text.strip().split()
+
+        if not words:
+            return
+
+        lines = self._wrap_words(
+            draw=draw,
+            words=words,
+            font=font,
+            max_width=self.width - (style.horizontal_padding * 2),
+        )
+
+        line_metrics = [
+            self._get_text_size(draw=draw, text=" ".join(line), font=font)
+            for line in lines
+        ]
+
+        total_text_height = sum(height for _width, height in line_metrics)
+        total_text_height += max(0, len(lines) - 1) * style.line_spacing
+
+        current_y = style.y_offset
+
+        if total_text_height < style.bar_height:
+            current_y = max(
+                style.y_offset,
+                (style.bar_height - total_text_height) // 2,
+            )
+
+        global_word_index = 0
+
+        for line, (line_width, line_height) in zip(lines, line_metrics):
+            if style.align == "left":
+                current_x = style.horizontal_padding
+            elif style.align == "right":
+                current_x = self.width - style.horizontal_padding - line_width
+            else:
+                current_x = (self.width - line_width) // 2
+
+            for word_index_in_line, word in enumerate(line):
+                word_color = self._get_header_word_color(
+                    word_index=global_word_index,
+                    style=style,
+                )
+
+                self._draw_text(
+                    draw=draw,
+                    position=(current_x, current_y),
+                    text=word,
+                    font=font,
+                    fill=word_color,
+                    stroke_width=style.stroke_width,
+                    stroke_color=self._hex_to_rgba(style.stroke_color, alpha=255),
+                )
+
+                word_width, _word_height = self._get_text_size(
+                    draw=draw,
+                    text=word,
+                    font=font,
+                )
+
+                current_x += word_width
+
+                if word_index_in_line < len(line) - 1:
+                    space_width, _space_height = self._get_text_size(
+                        draw=draw,
+                        text=" ",
+                        font=font,
+                    )
+                    current_x += space_width
+
+                global_word_index += 1
+
+            current_y += line_height + style.line_spacing
+
+    def _draw_ranking_overlay(
+        self,
+        draw: ImageDraw.ImageDraw,
+        ranked_segments: list[RenderSegment],
+        style: RankingOverlayConfig,
+        header_style: HeaderOverlayConfig,
+        current_rank_index: int | None = None,
+    ) -> None:
         number_font = self._load_font(
             size=style.number_font_size,
             bold=True,
@@ -54,13 +182,21 @@ class OverlayImageBuilder:
         stroke_color = self._hex_to_rgba(style.stroke_color, alpha=220)
         shadow_color = self._hex_to_rgba(style.shadow_color, alpha=180)
 
+        effective_y_start = style.y_start
+
+        if header_style.enabled:
+            effective_y_start = max(
+                style.y_start,
+                header_style.bar_height + 35,
+            )
+
         for row_index, segment in enumerate(ranked_segments):
             rank = segment.rank_index
 
             if rank is None:
                 continue
 
-            y = style.y_start + row_index * style.line_height
+            y = effective_y_start + row_index * style.line_height
 
             number_text = f"{rank}."
             number_color = self._get_number_color(rank=rank, style=style)
@@ -97,8 +233,48 @@ class OverlayImageBuilder:
                     shadow_offset=(style.shadow_offset_x, style.shadow_offset_y),
                 )
 
-        image.save(output_path)
-        return output_path
+    def _wrap_words(
+        self,
+        draw: ImageDraw.ImageDraw,
+        words: list[str],
+        font: ImageFont.ImageFont,
+        max_width: int,
+    ) -> list[list[str]]:
+        lines: list[list[str]] = []
+        current_line: list[str] = []
+
+        for word in words:
+            test_line = [*current_line, word]
+            test_text = " ".join(test_line)
+            test_width, _test_height = self._get_text_size(
+                draw=draw,
+                text=test_text,
+                font=font,
+            )
+
+            if test_width <= max_width or not current_line:
+                current_line = test_line
+            else:
+                lines.append(current_line)
+                current_line = [word]
+
+        if current_line:
+            lines.append(current_line)
+
+        return lines
+
+    def _get_header_word_color(
+        self,
+        word_index: int,
+        style: HeaderOverlayConfig,
+    ) -> tuple[int, int, int, int]:
+        color_hex = (
+            style.word_colors.get(str(word_index))
+            or style.default_word_color
+            or "#FFFFFF"
+        )
+
+        return self._hex_to_rgba(color_hex)
 
     def _get_number_color(
         self,
@@ -143,6 +319,34 @@ class OverlayImageBuilder:
             stroke_width=stroke_width,
             stroke_fill=stroke_color,
         )
+
+    def _draw_text(
+        self,
+        draw: ImageDraw.ImageDraw,
+        position: tuple[int, int],
+        text: str,
+        font: ImageFont.ImageFont,
+        fill: tuple[int, int, int, int],
+        stroke_width: int,
+        stroke_color: tuple[int, int, int, int],
+    ) -> None:
+        draw.text(
+            position,
+            text,
+            font=font,
+            fill=fill,
+            stroke_width=stroke_width,
+            stroke_fill=stroke_color,
+        )
+
+    def _get_text_size(
+        self,
+        draw: ImageDraw.ImageDraw,
+        text: str,
+        font: ImageFont.ImageFont,
+    ) -> tuple[int, int]:
+        bbox = draw.textbbox((0, 0), text, font=font)
+        return bbox[2] - bbox[0], bbox[3] - bbox[1]
 
     def _load_font(
         self,

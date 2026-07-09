@@ -66,17 +66,25 @@ class FFmpegRenderer:
 
             self._normalize_clip(segment.path, normalized_path)
 
-            if segment.show_ranking_overlay and overlay_style.enabled:
-                self._log(f"[{index}/{total_segments}] Burning ranking overlay.")
+            should_burn_overlay = (
+                    render_plan.preset_config.header_overlay.enabled
+                    or (
+                            segment.show_ranking_overlay
+                            and overlay_style.enabled
+                    )
+            )
+
+            if should_burn_overlay:
+                self._log(f"[{index}/{total_segments}] Burning overlay modules.")
 
                 overlay_path = project_temp_dir / f"overlay_{index:03d}.png"
                 overlayed_path = project_temp_dir / f"overlayed_{index:03d}.mp4"
 
-                self.overlay_builder.build_ranking_overlay(
+                self.overlay_builder.build_segment_overlay(
                     output_path=overlay_path,
                     ranked_segments=ranked_segments,
-                    style=overlay_style,
-                    current_rank_index=segment.rank_index,
+                    current_segment=segment,
+                    preset_config=render_plan.preset_config,
                 )
 
                 self._burn_overlay(

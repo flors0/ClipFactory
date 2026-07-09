@@ -8,9 +8,7 @@ from PySide6.QtCore import QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
-    QCheckBox,
     QComboBox,
-    QFileDialog,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -29,6 +27,7 @@ from app.download.source_resolver import SourceResolveError, SourceResolver
 from app.render.ffmpeg_renderer import FFmpegRenderer, FFmpegRenderError
 from app.render.timeline_builder import TimelineBuilder
 from app.ui.clip_slot_widget import ClipSlotWidget
+from app.ui.preset_settings_dialog import PresetSettingsDialog
 
 
 CORE_PRESET_IDS = {
@@ -56,6 +55,9 @@ class MainWindow(QMainWindow):
         self.delete_preset_button = QPushButton("Delete Preset")
         self.delete_preset_button.clicked.connect(self._delete_current_preset)
 
+        self.preset_settings_button = QPushButton("Preset Settings")
+        self.preset_settings_button.clicked.connect(self._open_preset_settings)
+
         self.render_video_button = QPushButton("Render Video")
         self.render_video_button.clicked.connect(self._render_video)
 
@@ -72,28 +74,10 @@ class MainWindow(QMainWindow):
         top_layout.addWidget(self.preset_select)
         top_layout.addWidget(self.add_preset_button)
         top_layout.addWidget(self.delete_preset_button)
+        top_layout.addWidget(self.preset_settings_button)
         top_layout.addWidget(self.render_video_button)
         top_layout.addWidget(self.render_all_button)
         top_layout.addWidget(self.open_output_button)
-
-        self.interstitial_enabled_checkbox = QCheckBox("Preset transition between main clips")
-        self.interstitial_path_input = QLineEdit()
-        self.interstitial_path_input.setPlaceholderText(
-            "Select transition clip, e.g. assets/transitions/static_noise.mp4"
-        )
-
-        self.interstitial_browse_button = QPushButton("Transition File")
-        self.interstitial_browse_button.clicked.connect(self._browse_transition_file)
-
-        self.save_preset_button = QPushButton("Save Preset")
-        self.save_preset_button.clicked.connect(self._save_current_preset_settings)
-
-        transition_layout = QHBoxLayout()
-        transition_layout.addWidget(self.interstitial_enabled_checkbox)
-        transition_layout.addWidget(QLabel("Transition Clip"))
-        transition_layout.addWidget(self.interstitial_path_input)
-        transition_layout.addWidget(self.interstitial_browse_button)
-        transition_layout.addWidget(self.save_preset_button)
 
         self.slots_layout = QVBoxLayout()
         self.slots_layout.addStretch()
@@ -112,7 +96,6 @@ class MainWindow(QMainWindow):
 
         main_layout = QVBoxLayout()
         main_layout.addLayout(top_layout)
-        main_layout.addLayout(transition_layout)
         main_layout.addWidget(scroll_area)
         main_layout.addWidget(QLabel("Logs"))
         main_layout.addWidget(self.log_view)
@@ -123,11 +106,11 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
 
         self._load_presets_into_dropdown(select_preset_id="youtube_ranking")
-        self.preset_select.currentIndexChanged.connect(self._load_current_preset_settings)
+        self.preset_select.currentIndexChanged.connect(self._on_preset_changed)
 
         self._add_slot()
         self._log("ClipFactory started.")
-        self._load_current_preset_settings()
+        self._on_preset_changed()
 
     def _log(self, message: str) -> None:
         self.log_view.appendPlainText(message)
@@ -238,10 +221,17 @@ class MainWindow(QMainWindow):
 
         return True
 
-    def _load_current_preset_settings(self) -> None:
+    def _on_preset_changed(self) -> None:
+        preset_id = self._current_preset_id()
+
+        if preset_id:
+            self._log(f"Preset selected: {preset_id}")
+
+    def _open_preset_settings(self) -> None:
         preset_id = self._current_preset_id()
 
         if not preset_id:
+            self._log("No preset selected.")
             return
 
         data = self._load_preset_json(preset_id)
@@ -249,21 +239,22 @@ class MainWindow(QMainWindow):
         if data is None:
             return
 
-        interstitial = data.get("preset_interstitial", {})
+        dialog = PresetSettingsDialog(
+            preset_data=data,
+            parent=self,
+        )
 
-        enabled = bool(interstitial.get("enabled", False))
-        path = str(interstitial.get("path", ""))
+        if dialog.exec() != PresetSettingsDialog.DialogCode.Accepted:
+            return
 
-        self.interstitial_enabled_checkbox.blockSignals(True)
-        self.interstitial_path_input.blockSignals(True)
+        updated_data = dialog.get_preset_data()
+        updated_data["id"] = preset_id
 
-        self.interstitial_enabled_checkbox.setChecked(enabled)
-        self.interstitial_path_input.setText(path)
+        if not self._write_preset_json(preset_id, updated_data):
+            return
 
-        self.interstitial_enabled_checkbox.blockSignals(False)
-        self.interstitial_path_input.blockSignals(False)
-
-        self._log(f"Preset loaded: {preset_id}")
+        self._load_presets_into_dropdown(select_preset_id=preset_id)
+        self._log(f"Preset settings saved: {preset_id}")
 
     def _add_new_preset(self) -> None:
         current_preset_id = self._current_preset_id()
@@ -292,9 +283,6 @@ class MainWindow(QMainWindow):
         if base_data is None:
             return
 
-        if not self._apply_current_ui_settings_to_preset_data(base_data):
-            return
-
         new_preset_id = self._create_unique_preset_id(preset_name)
 
         base_data["id"] = new_preset_id
@@ -304,7 +292,7 @@ class MainWindow(QMainWindow):
             return
 
         self._load_presets_into_dropdown(select_preset_id=new_preset_id)
-        self._load_current_preset_settings()
+        self._on_preset_changed()
 
         self._log(f"New preset created: {preset_name} ({new_preset_id})")
 
@@ -347,7 +335,7 @@ class MainWindow(QMainWindow):
         self._log(f"Preset deleted: {preset_name} ({preset_id})")
 
         self._load_presets_into_dropdown(select_preset_id="youtube_ranking")
-        self._load_current_preset_settings()
+        self._on_preset_changed()
 
     def _create_unique_preset_id(self, preset_name: str) -> str:
         base_id = self._slugify_preset_name(preset_name)
@@ -369,68 +357,6 @@ class MainWindow(QMainWindow):
         cleaned = re.sub(r"[^a-z0-9]+", "_", cleaned)
         cleaned = cleaned.strip("_")
         return cleaned
-
-    def _browse_transition_file(self) -> None:
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Select transition clip",
-            str(Path("assets/transitions").resolve()),
-            "Videos (*.mp4 *.mov *.mkv *.webm);;All Files (*)",
-        )
-
-        if not file_path:
-            return
-
-        self.interstitial_path_input.setText(self._make_path_project_relative(file_path))
-
-    def _make_path_project_relative(self, raw_path: str) -> str:
-        path = Path(raw_path).expanduser()
-
-        try:
-            return path.resolve().relative_to(Path.cwd().resolve()).as_posix()
-        except ValueError:
-            return path.resolve().as_posix()
-
-    def _apply_current_ui_settings_to_preset_data(self, data: dict) -> bool:
-        enabled = self.interstitial_enabled_checkbox.isChecked()
-        transition_path_raw = self.interstitial_path_input.text().strip()
-
-        if enabled:
-            if not transition_path_raw:
-                self._log("Transition is enabled, but no transition clip path is set.")
-                return False
-
-            transition_path = Path(transition_path_raw)
-
-            if not transition_path.exists():
-                self._log(f"Transition clip does not exist: {transition_path}")
-                return False
-
-        data["preset_interstitial"] = {
-            "enabled": enabled,
-            "path": transition_path_raw,
-            "insert_between_main_clips": True,
-        }
-
-        return True
-
-    def _save_current_preset_settings(self, silent: bool = False) -> bool:
-        preset_id = self._current_preset_id()
-        data = self._load_preset_json(preset_id)
-
-        if data is None:
-            return False
-
-        if not self._apply_current_ui_settings_to_preset_data(data):
-            return False
-
-        if not self._write_preset_json(preset_id, data):
-            return False
-
-        if not silent:
-            self._log(f"Preset saved: {preset_id}")
-
-        return True
 
     def _open_output_folder(self) -> None:
         output_dir = Path("data/output")
@@ -533,14 +459,11 @@ class MainWindow(QMainWindow):
     def _set_render_buttons_enabled(self, enabled: bool) -> None:
         self.render_video_button.setEnabled(enabled)
         self.render_all_button.setEnabled(enabled)
-        self.save_preset_button.setEnabled(enabled)
         self.add_preset_button.setEnabled(enabled)
         self.delete_preset_button.setEnabled(enabled)
+        self.preset_settings_button.setEnabled(enabled)
 
     def _render_video(self) -> None:
-        if not self._save_current_preset_settings(silent=True):
-            return
-
         self._set_render_buttons_enabled(False)
         self.render_video_button.setText("Rendering...")
         self._log("Render started.")
@@ -571,9 +494,6 @@ class MainWindow(QMainWindow):
         self._log(f"Render finished: {output_path}")
 
     def _render_all_presets(self) -> None:
-        if not self._save_current_preset_settings(silent=True):
-            return
-
         self._set_render_buttons_enabled(False)
         self.render_all_button.setText("Rendering all...")
         self._log("Render All Presets started.")

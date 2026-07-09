@@ -38,6 +38,30 @@ class RankingOverlayConfig(BaseModel):
     shadow_offset_y: int = 3
 
 
+class HeaderOverlayConfig(BaseModel):
+    enabled: bool = False
+    text: str = ""
+
+    bar_height: int = 220
+    background_color: str = "#000000"
+    background_opacity: int = 255
+
+    font_path: str = ""
+    font_size: int = 64
+    bold: bool = True
+
+    default_word_color: str = "#FFFFFF"
+    word_colors: dict[str, str] = Field(default_factory=dict)
+
+    stroke_color: str = "#000000"
+    stroke_width: int = 0
+
+    y_offset: int = 26
+    horizontal_padding: int = 50
+    line_spacing: int = 4
+    align: str = "center"
+
+
 class PresetInterstitialConfig(BaseModel):
     enabled: bool = False
     path: str = ""
@@ -49,7 +73,9 @@ class PresetConfig(BaseModel):
     name: str
     resolution: list[int] = Field(default_factory=lambda: [1080, 1920])
     fps: int = 30
+
     ranking_overlay: RankingOverlayConfig = Field(default_factory=RankingOverlayConfig)
+    header_overlay: HeaderOverlayConfig = Field(default_factory=HeaderOverlayConfig)
     preset_interstitial: PresetInterstitialConfig = Field(default_factory=PresetInterstitialConfig)
 
     @property
