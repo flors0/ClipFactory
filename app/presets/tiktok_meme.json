@@ -38,7 +38,10 @@
     "font_size": 64,
     "bold": true,
     "default_word_color": "#FFFFFF",
-    "word_colors": {},
+    "word_colors": {
+      "1": "#ff4fd8",
+      "2": "#ff4fd8"
+    },
     "stroke_color": "#000000",
     "stroke_width": 0,
     "y_offset": 26,
