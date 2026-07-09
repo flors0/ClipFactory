@@ -14,15 +14,6 @@ class SourceType(str, Enum):
 
 
 class SourceInput(BaseModel):
-    """
-    Represents what the user entered into a slot.
-
-    It can be:
-    - a URL
-    - a local file path
-    - empty
-    """
-
     raw_value: str = ""
     source_type: SourceType = SourceType.EMPTY
     resolved_path: Optional[Path] = None
@@ -41,23 +32,15 @@ class SourceInput(BaseModel):
 
 
 class ClipSlot(BaseModel):
-    """
-    One ranking slot.
-
-    main_source:
-        The main animal clip.
-
-    caption:
-        The ranking caption shown when this main clip starts.
-
-    after_source:
-        Optional meme/intercut clip that plays after this main clip.
-    """
-
     index: int
+
     main_source: SourceInput = Field(default_factory=SourceInput)
+    main_audio_source: SourceInput = Field(default_factory=SourceInput)
+
     caption: str = ""
-    after_source: SourceInput = Field(default_factory=SourceInput)
+
+    interstitial_source: SourceInput = Field(default_factory=SourceInput)
+    interstitial_audio_source: SourceInput = Field(default_factory=SourceInput)
 
     @property
     def has_main_clip(self) -> bool:

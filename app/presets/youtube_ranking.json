@@ -1,34 +1,30 @@
 {
   "id": "youtube_ranking",
   "name": "YouTube Ranking",
-  "resolution": [1080, 1920],
+  "resolution": [
+    1080,
+    1920
+  ],
   "fps": 30,
   "ranking_overlay": {
     "enabled": true,
     "mode": "progressive_reveal",
-
     "x_number": 60,
     "x_caption": 185,
     "y_start": 170,
     "line_height": 92,
-
     "number_font_size": 76,
     "caption_font_size": 56,
-
     "number_font_path": "",
     "caption_font_path": "",
-
     "number_colors": {
       "default": "#FFD700"
     },
-
     "caption_color": "#FFFFFF",
     "stroke_color": "#000000",
     "shadow_color": "#000000",
-
     "number_stroke_width": 4,
     "caption_stroke_width": 2,
-
     "shadow_offset_x": 3,
     "shadow_offset_y": 3
   },

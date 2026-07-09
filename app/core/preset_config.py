@@ -39,14 +39,6 @@ class RankingOverlayConfig(BaseModel):
 
 
 class PresetInterstitialConfig(BaseModel):
-    """
-    Automatic preset-level clip inserted between main clips.
-
-    Example:
-    TikTok preset can automatically insert a static-noise transition
-    between main clips, without using the manual After Clip slot.
-    """
-
     enabled: bool = False
     path: str = ""
     insert_between_main_clips: bool = True
@@ -76,7 +68,7 @@ def load_preset_config(
     preset_path = presets_dir / f"{preset_id}.json"
 
     if not preset_path.exists():
-        raise FileNotFoundError(f"Preset nicht gefunden: {preset_path}")
+        raise FileNotFoundError(f"Preset not found: {preset_path}")
 
     data = json.loads(preset_path.read_text(encoding="utf-8"))
     return PresetConfig(**data)

@@ -11,13 +11,14 @@ from app.core.preset_config import PresetConfig
 
 class SegmentType(str, Enum):
     MAIN_CLIP = "main_clip"
-    AFTER_CLIP = "after_clip"
+    INTERSTITIAL_CLIP = "interstitial_clip"
     PRESET_INTERSTITIAL = "preset_interstitial"
 
 
 class RenderSegment(BaseModel):
     segment_type: SegmentType
     path: Path
+    additional_audio_path: Optional[Path] = None
     rank_index: Optional[int] = None
     caption: str = ""
     show_ranking_overlay: bool = False

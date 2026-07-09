@@ -30,10 +30,12 @@ from app.render.ffmpeg_renderer import FFmpegRenderer, FFmpegRenderError
 from app.render.timeline_builder import TimelineBuilder
 from app.ui.clip_slot_widget import ClipSlotWidget
 
+
 CORE_PRESET_IDS = {
     "youtube_ranking",
     "tiktok_meme",
 }
+
 
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
@@ -54,17 +56,17 @@ class MainWindow(QMainWindow):
         self.delete_preset_button = QPushButton("Delete Preset")
         self.delete_preset_button.clicked.connect(self._delete_current_preset)
 
-        self.render_video_button = QPushButton("Video rendern")
+        self.render_video_button = QPushButton("Render Video")
         self.render_video_button.clicked.connect(self._render_video)
 
-        self.render_all_button = QPushButton("Alle Presets rendern")
+        self.render_all_button = QPushButton("Render All Presets")
         self.render_all_button.clicked.connect(self._render_all_presets)
 
-        self.open_output_button = QPushButton("Output-Ordner öffnen")
+        self.open_output_button = QPushButton("Open Output Folder")
         self.open_output_button.clicked.connect(self._open_output_folder)
 
         top_layout = QHBoxLayout()
-        top_layout.addWidget(QLabel("Projektname"))
+        top_layout.addWidget(QLabel("Project Name"))
         top_layout.addWidget(self.project_name_input)
         top_layout.addWidget(QLabel("Preset"))
         top_layout.addWidget(self.preset_select)
@@ -74,21 +76,21 @@ class MainWindow(QMainWindow):
         top_layout.addWidget(self.render_all_button)
         top_layout.addWidget(self.open_output_button)
 
-        self.interstitial_enabled_checkbox = QCheckBox("Preset-Transition zwischen Main-Clips")
+        self.interstitial_enabled_checkbox = QCheckBox("Preset transition between main clips")
         self.interstitial_path_input = QLineEdit()
         self.interstitial_path_input.setPlaceholderText(
-            "Transition-Clip auswählen, z. B. assets/transitions/static_noise.mp4"
+            "Select transition clip, e.g. assets/transitions/static_noise.mp4"
         )
 
-        self.interstitial_browse_button = QPushButton("Transition Datei")
+        self.interstitial_browse_button = QPushButton("Transition File")
         self.interstitial_browse_button.clicked.connect(self._browse_transition_file)
 
-        self.save_preset_button = QPushButton("Preset speichern")
+        self.save_preset_button = QPushButton("Save Preset")
         self.save_preset_button.clicked.connect(self._save_current_preset_settings)
 
         transition_layout = QHBoxLayout()
         transition_layout.addWidget(self.interstitial_enabled_checkbox)
-        transition_layout.addWidget(QLabel("Clip"))
+        transition_layout.addWidget(QLabel("Transition Clip"))
         transition_layout.addWidget(self.interstitial_path_input)
         transition_layout.addWidget(self.interstitial_browse_button)
         transition_layout.addWidget(self.save_preset_button)
@@ -106,7 +108,7 @@ class MainWindow(QMainWindow):
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
         self.log_view.setMaximumHeight(180)
-        self.log_view.setPlaceholderText("Logs erscheinen hier...")
+        self.log_view.setPlaceholderText("Logs will appear here...")
 
         main_layout = QVBoxLayout()
         main_layout.addLayout(top_layout)
@@ -124,7 +126,7 @@ class MainWindow(QMainWindow):
         self.preset_select.currentIndexChanged.connect(self._load_current_preset_settings)
 
         self._add_slot()
-        self._log("ClipFactory gestartet.")
+        self._log("ClipFactory started.")
         self._load_current_preset_settings()
 
     def _log(self, message: str) -> None:
@@ -147,7 +149,7 @@ class MainWindow(QMainWindow):
 
         if last_slot.has_main_value():
             self._add_slot()
-            self._log(f"Slot {len(self.slot_widgets)} hinzugefügt.")
+            self._log(f"Slot {len(self.slot_widgets)} added.")
 
     def _current_preset_id(self) -> str:
         preset_id = self.preset_select.currentData()
@@ -207,19 +209,19 @@ class MainWindow(QMainWindow):
 
     def _load_preset_json(self, preset_id: str) -> dict | None:
         if not preset_id:
-            self._log("Kein Preset ausgewählt.")
+            self._log("No preset selected.")
             return None
 
         preset_path = self._preset_path(preset_id)
 
         if not preset_path.exists():
-            self._log(f"Preset-Datei nicht gefunden: {preset_path}")
+            self._log(f"Preset file not found: {preset_path}")
             return None
 
         try:
             return json.loads(preset_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as error:
-            self._log(f"Preset JSON konnte nicht gelesen werden: {error}")
+            self._log(f"Could not read preset JSON: {error}")
             return None
 
     def _write_preset_json(self, preset_id: str, data: dict) -> bool:
@@ -231,7 +233,7 @@ class MainWindow(QMainWindow):
                 encoding="utf-8",
             )
         except OSError as error:
-            self._log(f"Preset konnte nicht gespeichert werden: {error}")
+            self._log(f"Could not save preset: {error}")
             return False
 
         return True
@@ -261,19 +263,19 @@ class MainWindow(QMainWindow):
         self.interstitial_enabled_checkbox.blockSignals(False)
         self.interstitial_path_input.blockSignals(False)
 
-        self._log(f"Preset geladen: {preset_id}")
+        self._log(f"Preset loaded: {preset_id}")
 
     def _add_new_preset(self) -> None:
         current_preset_id = self._current_preset_id()
 
         if not current_preset_id:
-            self._log("Kein Basis-Preset ausgewählt.")
+            self._log("No base preset selected.")
             return
 
         preset_name, accepted = QInputDialog.getText(
             self,
             "Add New Preset",
-            "Name für neues Preset:",
+            "New preset name:",
         )
 
         if not accepted:
@@ -282,7 +284,7 @@ class MainWindow(QMainWindow):
         preset_name = preset_name.strip()
 
         if not preset_name:
-            self._log("Preset wurde nicht erstellt: Name ist leer.")
+            self._log("Preset was not created: name is empty.")
             return
 
         base_data = self._load_preset_json(current_preset_id)
@@ -304,17 +306,17 @@ class MainWindow(QMainWindow):
         self._load_presets_into_dropdown(select_preset_id=new_preset_id)
         self._load_current_preset_settings()
 
-        self._log(f"Neues Preset erstellt: {preset_name} ({new_preset_id})")
+        self._log(f"New preset created: {preset_name} ({new_preset_id})")
 
     def _delete_current_preset(self) -> None:
         preset_id = self._current_preset_id()
 
         if not preset_id:
-            self._log("Kein Preset ausgewählt.")
+            self._log("No preset selected.")
             return
 
         if preset_id in CORE_PRESET_IDS:
-            self._log(f"Core-Preset kann nicht gelöscht werden: {preset_id}")
+            self._log(f"Core preset cannot be deleted: {preset_id}")
             return
 
         data = self._load_preset_json(preset_id)
@@ -325,8 +327,8 @@ class MainWindow(QMainWindow):
 
         answer = QMessageBox.question(
             self,
-            "Preset löschen",
-            f"Preset wirklich löschen?\n\n{preset_name}",
+            "Delete Preset",
+            f"Delete this preset?\n\n{preset_name}",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -339,10 +341,10 @@ class MainWindow(QMainWindow):
         try:
             preset_path.unlink()
         except OSError as error:
-            self._log(f"Preset konnte nicht gelöscht werden: {error}")
+            self._log(f"Could not delete preset: {error}")
             return
 
-        self._log(f"Preset gelöscht: {preset_name} ({preset_id})")
+        self._log(f"Preset deleted: {preset_name} ({preset_id})")
 
         self._load_presets_into_dropdown(select_preset_id="youtube_ranking")
         self._load_current_preset_settings()
@@ -371,7 +373,7 @@ class MainWindow(QMainWindow):
     def _browse_transition_file(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Transition-Clip auswählen",
+            "Select transition clip",
             str(Path("assets/transitions").resolve()),
             "Videos (*.mp4 *.mov *.mkv *.webm);;All Files (*)",
         )
@@ -395,13 +397,13 @@ class MainWindow(QMainWindow):
 
         if enabled:
             if not transition_path_raw:
-                self._log("Transition ist aktiviert, aber kein Clip-Pfad ist gesetzt.")
+                self._log("Transition is enabled, but no transition clip path is set.")
                 return False
 
             transition_path = Path(transition_path_raw)
 
             if not transition_path.exists():
-                self._log(f"Transition-Clip existiert nicht: {transition_path}")
+                self._log(f"Transition clip does not exist: {transition_path}")
                 return False
 
         data["preset_interstitial"] = {
@@ -426,7 +428,7 @@ class MainWindow(QMainWindow):
             return False
 
         if not silent:
-            self._log(f"Preset gespeichert: {preset_id}")
+            self._log(f"Preset saved: {preset_id}")
 
         return True
 
@@ -445,13 +447,17 @@ class MainWindow(QMainWindow):
             values = widget.get_values()
 
             main_source = SourceInput.from_raw(values["main"])
-            after_source = SourceInput.from_raw(values["after"])
+            main_audio_source = SourceInput.from_raw(values["main_audio"])
+            interstitial_source = SourceInput.from_raw(values["interstitial"])
+            interstitial_audio_source = SourceInput.from_raw(values["interstitial_audio"])
 
             slot = ClipSlot(
                 index=values["index"],
                 main_source=main_source,
+                main_audio_source=main_audio_source,
                 caption=values["caption"],
-                after_source=after_source,
+                interstitial_source=interstitial_source,
+                interstitial_audio_source=interstitial_audio_source,
             )
 
             slots.append(slot)
@@ -471,19 +477,41 @@ class MainWindow(QMainWindow):
         )
 
         for slot in project.active_slots():
-            self._log(f"Quelle wird vorbereitet: Slot {slot.index} Main Clip")
+            self._log(f"Preparing source: Slot {slot.index} Main Clip")
 
             slot.main_source = resolver.resolve(
                 slot.main_source,
                 name_hint=f"slot_{slot.index:02d}_main",
             )
 
-            if slot.after_source.raw_value.strip():
-                self._log(f"Quelle wird vorbereitet: Slot {slot.index} After Clip")
+            if slot.main_audio_source.raw_value.strip():
+                self._log(f"Preparing audio: Slot {slot.index} Main Audio")
 
-                slot.after_source = resolver.resolve(
-                    slot.after_source,
-                    name_hint=f"slot_{slot.index:02d}_after",
+                slot.main_audio_source = resolver.resolve(
+                    slot.main_audio_source,
+                    name_hint=f"slot_{slot.index:02d}_main_audio",
+                )
+
+            if slot.interstitial_source.raw_value.strip():
+                self._log(f"Preparing source: Slot {slot.index} Manual Interstitial")
+
+                slot.interstitial_source = resolver.resolve(
+                    slot.interstitial_source,
+                    name_hint=f"slot_{slot.index:02d}_interstitial",
+                )
+
+                if slot.interstitial_audio_source.raw_value.strip():
+                    self._log(f"Preparing audio: Slot {slot.index} Interstitial Audio")
+
+                    slot.interstitial_audio_source = resolver.resolve(
+                        slot.interstitial_audio_source,
+                        name_hint=f"slot_{slot.index:02d}_interstitial_audio",
+                    )
+
+            elif slot.interstitial_audio_source.raw_value.strip():
+                self._log(
+                    f"Slot {slot.index} has interstitial audio but no manual interstitial clip. "
+                    "Interstitial audio will be ignored."
                 )
 
         return project
@@ -492,14 +520,14 @@ class MainWindow(QMainWindow):
         project = self._collect_project_data(preset_id=preset_id)
 
         if not project.active_slots():
-            raise ValueError("Bitte mindestens einen Main Clip einfügen.")
+            raise ValueError("Please add at least one main clip.")
 
         self._log(f"Preset: {project.preset_id}")
-        self._log("Quellen werden aufgelöst...")
+        self._log("Resolving sources...")
 
         project = self._resolve_project_sources(project)
 
-        self._log("RenderPlan wird gebaut.")
+        self._log("Building render plan.")
         return TimelineBuilder().build(project)
 
     def _set_render_buttons_enabled(self, enabled: bool) -> None:
@@ -514,8 +542,8 @@ class MainWindow(QMainWindow):
             return
 
         self._set_render_buttons_enabled(False)
-        self.render_video_button.setText("Rendert...")
-        self._log("Render gestartet.")
+        self.render_video_button.setText("Rendering...")
+        self._log("Render started.")
 
         try:
             render_plan = self._build_render_plan()
@@ -525,34 +553,34 @@ class MainWindow(QMainWindow):
             ).render(render_plan)
 
         except SourceResolveError as error:
-            self._log(f"Source Fehler: {error}")
+            self._log(f"Source error: {error}")
             return
 
         except FFmpegRenderError as error:
-            self._log(f"Render Fehler: {error}")
+            self._log(f"Render error: {error}")
             return
 
         except Exception as error:
-            self._log(f"Fehler: {error}")
+            self._log(f"Error: {error}")
             return
 
         finally:
             self._set_render_buttons_enabled(True)
-            self.render_video_button.setText("Video rendern")
+            self.render_video_button.setText("Render Video")
 
-        self._log(f"Render fertig: {output_path}")
+        self._log(f"Render finished: {output_path}")
 
     def _render_all_presets(self) -> None:
         if not self._save_current_preset_settings(silent=True):
             return
 
         self._set_render_buttons_enabled(False)
-        self.render_all_button.setText("Rendert alle...")
-        self._log("Render All Presets gestartet.")
+        self.render_all_button.setText("Rendering all...")
+        self._log("Render All Presets started.")
 
         try:
             for preset_id in self._available_preset_ids():
-                self._log(f"--- Preset Render Start: {preset_id} ---")
+                self._log(f"--- Preset render started: {preset_id} ---")
 
                 render_plan = self._build_render_plan(preset_id=preset_id)
 
@@ -560,22 +588,22 @@ class MainWindow(QMainWindow):
                     log_callback=self._log,
                 ).render(render_plan)
 
-                self._log(f"Preset fertig: {preset_id} -> {output_path}")
+                self._log(f"Preset finished: {preset_id} -> {output_path}")
 
-            self._log("Render All Presets fertig.")
+            self._log("Render All Presets finished.")
 
         except SourceResolveError as error:
-            self._log(f"Source Fehler: {error}")
+            self._log(f"Source error: {error}")
             return
 
         except FFmpegRenderError as error:
-            self._log(f"Render Fehler: {error}")
+            self._log(f"Render error: {error}")
             return
 
         except Exception as error:
-            self._log(f"Fehler: {error}")
+            self._log(f"Error: {error}")
             return
 
         finally:
             self._set_render_buttons_enabled(True)
-            self.render_all_button.setText("Alle Presets rendern")
+            self.render_all_button.setText("Render All Presets")

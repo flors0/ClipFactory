@@ -19,23 +19,25 @@ class TimelineBuilder:
 
         for slot_index, slot in enumerate(active_slots):
             if slot.main_source.resolved_path is None:
-                raise ValueError(f"Main clip in slot {slot.index} is not resolved.")
+                raise ValueError(f"Main clip in slot {slot.index} has not been resolved.")
 
             segments.append(
                 RenderSegment(
                     segment_type=SegmentType.MAIN_CLIP,
                     path=slot.main_source.resolved_path,
+                    additional_audio_path=slot.main_audio_source.resolved_path,
                     rank_index=slot.index,
                     caption=slot.caption,
                     show_ranking_overlay=show_ranking_overlay,
                 )
             )
 
-            if slot.after_source.resolved_path is not None:
+            if slot.interstitial_source.resolved_path is not None:
                 segments.append(
                     RenderSegment(
-                        segment_type=SegmentType.AFTER_CLIP,
-                        path=slot.after_source.resolved_path,
+                        segment_type=SegmentType.INTERSTITIAL_CLIP,
+                        path=slot.interstitial_source.resolved_path,
+                        additional_audio_path=slot.interstitial_audio_source.resolved_path,
                         rank_index=None,
                         caption="",
                         show_ranking_overlay=False,
@@ -45,12 +47,12 @@ class TimelineBuilder:
             is_last_main_slot = slot_index == len(active_slots) - 1
 
             if not is_last_main_slot:
-                interstitial_segment = self._build_preset_interstitial_segment(
+                preset_interstitial_segment = self._build_preset_interstitial_segment(
                     preset_config=preset_config,
                 )
 
-                if interstitial_segment is not None:
-                    segments.append(interstitial_segment)
+                if preset_interstitial_segment is not None:
+                    segments.append(preset_interstitial_segment)
 
         return RenderPlan(
             project_name=project.project_name,
@@ -77,20 +79,19 @@ class TimelineBuilder:
 
         if not interstitial.path.strip():
             raise ValueError(
-                f"Preset '{preset_config.id}' hat preset_interstitial aktiviert, "
-                "aber keinen Pfad gesetzt."
+                f"Preset '{preset_config.id}' has preset interstitial enabled, "
+                "but no path is configured."
             )
 
         interstitial_path = Path(interstitial.path)
 
         if not interstitial_path.exists():
-            raise ValueError(
-                f"Preset-Interstitial wurde nicht gefunden: {interstitial_path}"
-            )
+            raise ValueError(f"Preset interstitial was not found: {interstitial_path}")
 
         return RenderSegment(
             segment_type=SegmentType.PRESET_INTERSTITIAL,
             path=interstitial_path,
+            additional_audio_path=None,
             rank_index=None,
             caption="",
             show_ranking_overlay=False,
@@ -119,7 +120,7 @@ class TimelineBuilder:
             if not numbered_candidate.exists():
                 return numbered_candidate
 
-        raise RuntimeError("Konnte keinen freien Output-Dateinamen erzeugen.")
+        raise RuntimeError("Could not create a free output filename.")
 
     def _safe_filename_part(self, value: str) -> str:
         cleaned = value.strip().lower()

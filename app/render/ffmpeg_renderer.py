@@ -14,20 +14,6 @@ class FFmpegRenderError(Exception):
 
 
 class FFmpegRenderer:
-    """
-    MVP renderer.
-
-    - normalize every segment to preset resolution
-    - guarantee every segment has an AAC audio track
-    - optionally burn ranking overlay into main clips
-    - concat all clips with concat filter instead of stream copy
-
-    Why concat filter?
-        The concat demuxer with "-c copy" can behave badly when some clips
-        originally had audio and others did not. Re-encoding the final concat
-        is more stable for weird downloaded/social-media MP4s.
-    """
-
     def __init__(
         self,
         temp_dir: Path = Path("data/temp"),
@@ -72,17 +58,20 @@ class FFmpegRenderer:
         total_segments = len(render_plan.segments)
 
         for index, segment in enumerate(render_plan.segments, start=1):
-            self._log(f"[{index}/{total_segments}] Normalisiere: {segment.path.name}")
+            self._log(f"[{index}/{total_segments}] Normalizing: {segment.path.name}")
 
             normalized_path = project_temp_dir / f"normalized_{index:03d}.mp4"
+            working_path = normalized_path
             final_segment_path = project_temp_dir / f"segment_{index:03d}.mp4"
 
             self._normalize_clip(segment.path, normalized_path)
 
             if segment.show_ranking_overlay and overlay_style.enabled:
-                self._log(f"[{index}/{total_segments}] Ranking-Overlay wird eingebrannt.")
+                self._log(f"[{index}/{total_segments}] Burning ranking overlay.")
 
                 overlay_path = project_temp_dir / f"overlay_{index:03d}.png"
+                overlayed_path = project_temp_dir / f"overlayed_{index:03d}.mp4"
+
                 self.overlay_builder.build_ranking_overlay(
                     output_path=overlay_path,
                     ranked_segments=ranked_segments,
@@ -91,21 +80,35 @@ class FFmpegRenderer:
                 )
 
                 self._burn_overlay(
-                    input_path=normalized_path,
+                    input_path=working_path,
                     overlay_path=overlay_path,
+                    output_path=overlayed_path,
+                )
+
+                working_path = overlayed_path
+
+            if segment.additional_audio_path is not None:
+                self._log(
+                    f"[{index}/{total_segments}] Mixing additional audio: "
+                    f"{segment.additional_audio_path.name}"
+                )
+
+                self._mix_additional_audio(
+                    input_path=working_path,
+                    audio_path=segment.additional_audio_path,
                     output_path=final_segment_path,
                 )
             else:
-                shutil.copy2(normalized_path, final_segment_path)
+                shutil.copy2(working_path, final_segment_path)
 
             final_segment_paths.append(final_segment_path)
 
         render_plan.output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        self._log("Finales Video wird stabil zusammengesetzt.")
+        self._log("Building final video.")
         self._concat_clips_with_filter(final_segment_paths, render_plan.output_path)
 
-        self._log(f"Fertig: {render_plan.output_path}")
+        self._log(f"Finished: {render_plan.output_path}")
         return render_plan.output_path
 
     def _log(self, message: str) -> None:
@@ -122,7 +125,7 @@ class FFmpegRenderer:
 
         if result.returncode != 0:
             raise FFmpegRenderError(
-                "FFmpeg wurde nicht gefunden. Prüfe, ob ffmpeg im PATH ist."
+                "FFmpeg was not found. Make sure ffmpeg is installed and available in PATH."
             )
 
     def _has_audio_stream(self, input_path: Path) -> bool:
@@ -146,16 +149,14 @@ class FFmpegRenderer:
 
         return bool(result.stdout.strip())
 
-    def _get_video_duration_seconds(self, input_path: Path) -> float | None:
+    def _get_media_duration_seconds(self, input_path: Path) -> float | None:
         result = subprocess.run(
             [
                 "ffprobe",
                 "-v",
                 "error",
-                "-select_streams",
-                "v:0",
                 "-show_entries",
-                "stream=duration",
+                "format=duration",
                 "-of",
                 "default=noprint_wrappers=1:nokey=1",
                 str(input_path),
@@ -166,25 +167,6 @@ class FFmpegRenderer:
         )
 
         raw_value = result.stdout.strip()
-
-        if not raw_value or raw_value == "N/A":
-            result = subprocess.run(
-                [
-                    "ffprobe",
-                    "-v",
-                    "error",
-                    "-show_entries",
-                    "format=duration",
-                    "-of",
-                    "default=noprint_wrappers=1:nokey=1",
-                    str(input_path),
-                ],
-                capture_output=True,
-                text=True,
-                shell=False,
-            )
-
-            raw_value = result.stdout.strip()
 
         try:
             duration = float(raw_value)
@@ -198,10 +180,10 @@ class FFmpegRenderer:
 
     def _normalize_clip(self, input_path: Path, output_path: Path) -> None:
         if not input_path.exists():
-            raise FFmpegRenderError(f"Input-Datei existiert nicht: {input_path}")
+            raise FFmpegRenderError(f"Input file does not exist: {input_path}")
 
         has_audio = self._has_audio_stream(input_path)
-        duration = self._get_video_duration_seconds(input_path)
+        duration = self._get_media_duration_seconds(input_path)
 
         video_filter = (
             f"scale={self.width}:{self.height}:force_original_aspect_ratio=increase,"
@@ -212,7 +194,7 @@ class FFmpegRenderer:
         )
 
         if has_audio:
-            self._log(f"Audio erkannt: {input_path.name}")
+            self._log(f"Audio detected: {input_path.name}")
 
             command = [
                 "ffmpeg",
@@ -251,9 +233,8 @@ class FFmpegRenderer:
                     str(output_path),
                 ]
             )
-
         else:
-            self._log(f"Kein Audio erkannt: Silent Audio wird erzeugt für {input_path.name}")
+            self._log(f"No audio detected: creating silent audio for {input_path.name}")
 
             command = [
                 "ffmpeg",
@@ -351,9 +332,60 @@ class FFmpegRenderer:
 
         self._run(command, label=f"Burning overlay into {input_path.name}")
 
+    def _mix_additional_audio(
+        self,
+        input_path: Path,
+        audio_path: Path,
+        output_path: Path,
+    ) -> None:
+        if not audio_path.exists():
+            raise FFmpegRenderError(f"Additional audio does not exist: {audio_path}")
+
+        duration = self._get_media_duration_seconds(input_path)
+
+        if duration is None:
+            audio_trim_filter = "[1:a:0]asetpts=PTS-STARTPTS,aresample=48000[a1]"
+        else:
+            audio_trim_filter = (
+                f"[1:a:0]atrim=0:{duration:.3f},"
+                f"asetpts=PTS-STARTPTS,aresample=48000[a1]"
+            )
+
+        filter_complex = (
+            "[0:a:0]asetpts=PTS-STARTPTS,aresample=48000[a0];"
+            f"{audio_trim_filter};"
+            "[a0][a1]amix=inputs=2:duration=first:dropout_transition=0[a]"
+        )
+
+        command = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(input_path),
+            "-i",
+            str(audio_path),
+            "-filter_complex",
+            filter_complex,
+            "-map",
+            "0:v:0",
+            "-map",
+            "[a]",
+            "-c:v",
+            "copy",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-movflags",
+            "+faststart",
+            str(output_path),
+        ]
+
+        self._run(command, label=f"Mixing additional audio into {input_path.name}")
+
     def _concat_clips_with_filter(self, paths: list[Path], output_path: Path) -> None:
         if not paths:
-            raise FFmpegRenderError("Keine Segmente zum Zusammenfügen vorhanden.")
+            raise FFmpegRenderError("No segments to concatenate.")
 
         command = ["ffmpeg", "-y"]
 

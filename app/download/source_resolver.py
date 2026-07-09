@@ -25,10 +25,6 @@ class SourceResolver:
     Local file:
         Copies into data/downloads.
         Uses a cache key based on absolute path + size + modified timestamp.
-
-    Why cache?
-        The renderer should always work with local files, but we do not want to
-        re-download or re-copy the same source on every render.
     """
 
     def __init__(
@@ -62,17 +58,17 @@ class SourceResolver:
         input_path = Path(raw_path).expanduser()
 
         if not input_path.exists():
-            raise SourceResolveError(f"Lokale Datei existiert nicht: {input_path}")
+            raise SourceResolveError(f"Local file does not exist: {input_path}")
 
         cache_key = self._build_local_cache_key(input_path)
         cached_path = self._get_cached_path(cache_key)
 
         if cached_path is not None:
-            self._log(f"Local Cache Hit: {cached_path}")
+            self._log(f"Local cache hit: {cached_path}")
             source.resolved_path = cached_path
             return source
 
-        self._log(f"Local Cache Miss: {input_path.name} wird kopiert...")
+        self._log(f"Local cache miss: copying {input_path.name}...")
 
         suffix = input_path.suffix or ".mp4"
         output_path = self.download_dir / f"local_{cache_key[:12]}{suffix}"
@@ -86,7 +82,7 @@ class SourceResolver:
             resolved_path=output_path,
         )
 
-        self._log(f"Lokale Datei gecached: {output_path}")
+        self._log(f"Local file cached: {output_path}")
 
         source.resolved_path = output_path
         return source
@@ -98,11 +94,11 @@ class SourceResolver:
         cached_path = self._get_cached_path(cache_key)
 
         if cached_path is not None:
-            self._log(f"Download Cache Hit: {cached_path}")
+            self._log(f"Download cache hit: {cached_path}")
             source.resolved_path = cached_path
             return source
 
-        self._log(f"Download Cache Miss: URL wird geladen ({name_hint})...")
+        self._log(f"Download cache miss: downloading URL ({name_hint})...")
 
         file_prefix = f"url_{cache_key[:12]}"
         output_template = str(self.download_dir / f"{file_prefix}.%(ext)s")
@@ -134,7 +130,7 @@ class SourceResolver:
 
         if result.returncode != 0:
             raise SourceResolveError(
-                "yt-dlp konnte die URL nicht laden.\n\n"
+                "yt-dlp failed to download the URL.\n\n"
                 f"URL:\n{url}\n\n"
                 f"STDOUT:\n{result.stdout}\n\n"
                 f"STDERR:\n{result.stderr}"
@@ -144,7 +140,7 @@ class SourceResolver:
 
         if downloaded_path is None:
             raise SourceResolveError(
-                f"Download fertig, aber keine Datei gefunden für Prefix: {file_prefix}"
+                f"Download finished, but no file was found for prefix: {file_prefix}"
             )
 
         self._write_cache_entry(
@@ -154,7 +150,7 @@ class SourceResolver:
             resolved_path=downloaded_path,
         )
 
-        self._log(f"Download fertig: {downloaded_path}")
+        self._log(f"Download finished: {downloaded_path}")
 
         source.resolved_path = downloaded_path
         return source
