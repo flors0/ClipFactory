@@ -6,6 +6,13 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 
+class PlatformRulesConfig(BaseModel):
+    target_duration_seconds: float = 65.0
+    min_duration_seconds: float = 60.0
+    max_duration_seconds: float = 90.0
+    duration_enforcement: str = "warn"
+
+
 class RankingOverlayConfig(BaseModel):
     enabled: bool = True
     mode: str = "progressive_reveal"
@@ -74,6 +81,7 @@ class PresetConfig(BaseModel):
     resolution: list[int] = Field(default_factory=lambda: [1080, 1920])
     fps: int = 30
 
+    platform_rules: PlatformRulesConfig = Field(default_factory=PlatformRulesConfig)
     ranking_overlay: RankingOverlayConfig = Field(default_factory=RankingOverlayConfig)
     header_overlay: HeaderOverlayConfig = Field(default_factory=HeaderOverlayConfig)
     preset_interstitial: PresetInterstitialConfig = Field(default_factory=PresetInterstitialConfig)

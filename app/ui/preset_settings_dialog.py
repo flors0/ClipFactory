@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QTabWidget,
     QVBoxLayout,
     QWidget,
+    QComboBox,
 )
 
 
@@ -37,16 +38,19 @@ class PresetSettingsDialog(QDialog):
         self.tabs = QTabWidget()
 
         self.general_tab = QWidget()
+        self.rules_tab = QWidget()
         self.header_tab = QWidget()
         self.ranking_tab = QWidget()
         self.transition_tab = QWidget()
 
         self.tabs.addTab(self.general_tab, "General")
+        self.tabs.addTab(self.rules_tab, "Rules")
         self.tabs.addTab(self.header_tab, "Header")
         self.tabs.addTab(self.ranking_tab, "Ranking")
         self.tabs.addTab(self.transition_tab, "Transitions")
 
         self._build_general_tab()
+        self._build_rules_tab()
         self._build_header_tab()
         self._build_ranking_tab()
         self._build_transition_tab()
@@ -73,6 +77,7 @@ class PresetSettingsDialog(QDialog):
         ]
         data["fps"] = self.fps_input.value()
 
+        data["platform_rules"] = self._collect_platform_rules()
         data["header_overlay"] = self._collect_header_overlay()
         data["ranking_overlay"] = self._collect_ranking_overlay()
         data["preset_interstitial"] = self._collect_preset_interstitial()
@@ -101,6 +106,45 @@ class PresetSettingsDialog(QDialog):
         layout.addRow("Width", self.width_input)
         layout.addRow("Height", self.height_input)
         layout.addRow("FPS", self.fps_input)
+
+    def _build_rules_tab(self) -> None:
+        rules = self.preset_data.get("platform_rules", {})
+
+        self.target_duration_input = QSpinBox()
+        self.target_duration_input.setRange(0, 3600)
+        self.target_duration_input.setValue(int(float(rules.get("target_duration_seconds", 65))))
+
+        self.min_duration_input = QSpinBox()
+        self.min_duration_input.setRange(0, 3600)
+        self.min_duration_input.setValue(int(float(rules.get("min_duration_seconds", 60))))
+
+        self.max_duration_input = QSpinBox()
+        self.max_duration_input.setRange(0, 3600)
+        self.max_duration_input.setValue(int(float(rules.get("max_duration_seconds", 90))))
+
+        self.duration_enforcement_input = QComboBox()
+        self.duration_enforcement_input.addItems(["warn", "block", "auto_extend"])
+
+        current_enforcement = str(rules.get("duration_enforcement", "warn")).strip().lower()
+        enforcement_index = self.duration_enforcement_input.findText(current_enforcement)
+
+        if enforcement_index < 0:
+            enforcement_index = 0
+
+        self.duration_enforcement_input.setCurrentIndex(enforcement_index)
+
+        layout = QFormLayout(self.rules_tab)
+        layout.addRow("Target Duration Seconds", self.target_duration_input)
+        layout.addRow("Minimum Duration Seconds", self.min_duration_input)
+        layout.addRow("Maximum Duration Seconds", self.max_duration_input)
+        layout.addRow("Duration Enforcement", self.duration_enforcement_input)
+
+        note = QLabel(
+            "warn = render continues with warnings\n"
+            "block = render stops if duration rules fail\n"
+            "auto_extend = planned for later, currently behaves like warn"
+        )
+        layout.addRow("Mode Notes", note)
 
     def _build_header_tab(self) -> None:
         header = self.preset_data.get("header_overlay", {})
@@ -311,6 +355,14 @@ class PresetSettingsDialog(QDialog):
         layout.addRow(self.transition_enabled_input)
         layout.addRow(self.transition_insert_between_input)
         layout.addRow("Transition Clip", path_layout)
+
+    def _collect_platform_rules(self) -> dict:
+        return {
+            "target_duration_seconds": float(self.target_duration_input.value()),
+            "min_duration_seconds": float(self.min_duration_input.value()),
+            "max_duration_seconds": float(self.max_duration_input.value()),
+            "duration_enforcement": self.duration_enforcement_input.currentText(),
+        }
 
     def _collect_header_overlay(self) -> dict:
         return {

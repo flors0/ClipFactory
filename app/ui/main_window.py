@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.analyze.render_plan_analyzer import RenderPlanAnalyzer
 from app.core.models import ClipSlot, ProjectData, SourceInput
 from app.download.source_resolver import SourceResolveError, SourceResolver
 from app.render.ffmpeg_renderer import FFmpegRenderer, FFmpegRenderError
@@ -454,7 +455,18 @@ class MainWindow(QMainWindow):
         project = self._resolve_project_sources(project)
 
         self._log("Building render plan.")
-        return TimelineBuilder().build(project)
+        render_plan = TimelineBuilder().build(project)
+
+        self._log("Analyzing render plan.")
+        analysis = RenderPlanAnalyzer().analyze(render_plan)
+
+        for line in analysis.to_log_lines():
+            self._log(line)
+
+        if analysis.should_block_render:
+            raise ValueError("Render blocked by platform rules.")
+
+        return render_plan
 
     def _set_render_buttons_enabled(self, enabled: bool) -> None:
         self.render_video_button.setEnabled(enabled)

@@ -6,6 +6,12 @@
     1920
   ],
   "fps": 30,
+  "platform_rules": {
+    "target_duration_seconds": 65.0,
+    "min_duration_seconds": 60.0,
+    "max_duration_seconds": 90.0,
+    "duration_enforcement": "warn"
+  },
   "ranking_overlay": {
     "enabled": true,
     "mode": "progressive_reveal",
