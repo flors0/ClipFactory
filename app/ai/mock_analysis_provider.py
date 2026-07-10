@@ -25,6 +25,10 @@ class MockAIAnalysisProvider(AIAnalysisProvider):
     def provider_name(self) -> str:
         return "mock"
 
+    @property
+    def cache_identity(self) -> str:
+        return "mock:analysis-v1"
+
     def analyze_clip(
         self,
         request: ClipAnalysisRequest,

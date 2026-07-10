@@ -8,6 +8,8 @@ from app.ai.analysis_models import (
     TargetPlatform,
     VideoFormat,
 )
+from app.ai.analysis_cache import AIAnalysisCache
+from app.ai.cached_analysis_provider import CachedAIAnalysisProvider
 from app.ai.mock_analysis_provider import MockAIAnalysisProvider
 from app.analyze.analysis_models import MediaInfo
 from app.sources.mock_source_provider import MockSourceProvider
@@ -36,7 +38,14 @@ def main() -> None:
     )
 
     source_provider = MockSourceProvider()
-    ai_provider = MockAIAnalysisProvider()
+
+    base_ai_provider = MockAIAnalysisProvider()
+
+    ai_provider = CachedAIAnalysisProvider(
+        provider=base_ai_provider,
+        cache=AIAnalysisCache(),
+        log_callback=print,
+    )
 
     candidate_batch = source_provider.fetch_candidates(source_profile)
 
@@ -106,7 +115,11 @@ def main() -> None:
     print()
     print("Project creative result:")
     print(creative_result.model_dump_json(indent=2))
-
+    print()
+    print(
+        f"AI cache entries: "
+        f"{ai_provider.cache.entry_count()}"
+    )
 
 if __name__ == "__main__":
     main()

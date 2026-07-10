@@ -16,6 +16,8 @@ data/downloads/
 data/output/
 data/temp/
 data/projects/
+data/ai/
+data/asset_library.json
 
 # User assets / large media
 assets/memes/
@@ -30,3 +32,4 @@ assets/transitions/*.webm
 .vscode/
 .DS_Store
 Thumbs.db
+

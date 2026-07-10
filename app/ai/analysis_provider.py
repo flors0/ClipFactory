@@ -20,14 +20,31 @@ class AIAnalysisProvider(ABC):
     """
     Provider-independent interface for creative video analysis.
 
-    A future Gemini provider will implement this interface. ClipFactory
-    itself does not need to know which AI service is being used.
+    Gemini, Twelve Labs, or another provider can implement this interface
+    without changing the rest of ClipFactory.
     """
 
     @property
     @abstractmethod
     def provider_name(self) -> str:
         raise NotImplementedError
+
+    @property
+    def cache_identity(self) -> str:
+        """
+        Identifies the provider configuration used for cached results.
+
+        Real providers should include the model and prompt/schema version,
+        for example:
+
+            gemini:gemini-2.5-flash:clip-analysis-v1
+            twelve-labs:marengo-2.7:clip-analysis-v1
+
+        If the model or prompt changes, the identity should change as well.
+        This prevents old cached results from being reused incorrectly.
+        """
+
+        return self.provider_name
 
     @abstractmethod
     def analyze_clip(
