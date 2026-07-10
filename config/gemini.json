@@ -1,0 +1,52 @@
+{
+  "enabled": true,
+
+  "model": "gemini-3.1-flash-lite",
+  "api_mode": "interactions",
+  "api_key_environment_variable": "GEMINI_API_KEY",
+
+  "store_interactions": false,
+  "media_resolution": "medium",
+
+  "request_timeout_seconds": 180,
+  "file_processing_timeout_seconds": 300,
+
+  "pricing": {
+    "input_text_image_video_per_million_usd": 0.25,
+    "input_audio_per_million_usd": 0.5,
+    "output_including_thinking_per_million_usd": 1.5,
+    "last_verified_date": "2026-07-10"
+  },
+
+  "token_estimation": {
+    "text_characters_per_token": 4,
+
+    "unspecified_video_tokens_per_second": 70,
+    "low_video_tokens_per_second": 70,
+    "medium_video_tokens_per_second": 70,
+    "high_video_tokens_per_second": 280,
+
+    "audio_tokens_per_second": 32,
+    "estimate_safety_multiplier": 1.15,
+
+    "last_verified_date": "2026-07-10"
+  },
+
+  "clip_analysis": {
+    "prompt_version": "clip-analysis-v1",
+    "output_token_reserve": 1200,
+    "thinking_token_reserve": 800
+  },
+
+  "project_creative": {
+    "prompt_version": "project-creative-v1",
+    "output_token_reserve": 1500,
+    "thinking_token_reserve": 700
+  },
+
+  "final_video_review": {
+    "prompt_version": "final-video-review-v1",
+    "output_token_reserve": 1200,
+    "thinking_token_reserve": 800
+  }
+}
