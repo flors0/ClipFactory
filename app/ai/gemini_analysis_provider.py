@@ -575,6 +575,8 @@ class GeminiAnalysisProvider(AIAnalysisProvider):
             cost = calculate_gemini_usage_cost(
                 usage=usage,
                 config=self.config,
+                embedded_audio_seconds=audio_seconds,
+                has_embedded_audio=audio_seconds > 0,
             )
 
             usage_record = AIUsageRecord(
@@ -626,6 +628,12 @@ class GeminiAnalysisProvider(AIAnalysisProvider):
                     ),
                     "audio_input_tokens": (
                         usage.audio_input_tokens
+                    ),
+                    "priced_audio_input_tokens": (
+                        cost.priced_audio_input_tokens
+                    ),
+                    "audio_token_source": (
+                        cost.audio_token_source
                     ),
                     "other_input_tokens": (
                         usage.other_input_tokens

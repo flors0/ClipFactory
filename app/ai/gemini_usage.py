@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -11,9 +12,9 @@ class GeminiUsageSnapshot(BaseModel):
     """
     Normalized token usage extracted from a Gemini response.
 
-    The Gemini API may expose input usage both as a total and as a
-    modality breakdown. ClipFactory stores both forms so video, audio,
-    and text usage can be inspected separately.
+    Gemini may report an uploaded video's embedded audio as part of the
+    video modality instead of returning a separate audio modality entry.
+    The raw reported values are preserved here.
     """
 
     text_input_tokens: int = Field(default=0, ge=0)
@@ -151,16 +152,22 @@ class GeminiUsageSnapshot(BaseModel):
 
 class GeminiUsageCostBreakdown(BaseModel):
     """
-    Cost calculated from actual Gemini token counts and configured prices.
+    Cost calculated locally from Gemini's actual token totals.
 
-    Google does not return a monetary amount with each response. Therefore,
-    this is calculated locally from actual token usage and the configured
-    pricing table.
+    When Gemini groups embedded video audio into the video modality, the
+    audio share is estimated from media duration and moved from the
+    non-audio price bucket into the audio price bucket.
     """
 
     non_audio_input_tokens: int = Field(default=0, ge=0)
-    audio_input_tokens: int = Field(default=0, ge=0)
+    priced_audio_input_tokens: int = Field(default=0, ge=0)
+
+    reported_audio_input_tokens: int = Field(default=0, ge=0)
+    estimated_embedded_audio_tokens: int = Field(default=0, ge=0)
+
     output_and_thinking_tokens: int = Field(default=0, ge=0)
+
+    audio_token_source: str = "none"
 
     non_audio_input_cost_usd: float = Field(default=0.0, ge=0)
     audio_input_cost_usd: float = Field(default=0.0, ge=0)
@@ -171,6 +178,18 @@ class GeminiUsageCostBreakdown(BaseModel):
     def to_log_lines(self) -> list[str]:
         return [
             "Gemini token-derived cost:",
+            (
+                "Audio token pricing source: "
+                f"{self.audio_token_source}"
+            ),
+            (
+                "Priced non-audio input tokens: "
+                f"{self.non_audio_input_tokens:,}"
+            ),
+            (
+                "Priced audio input tokens: "
+                f"{self.priced_audio_input_tokens:,}"
+            ),
             (
                 "Non-audio input cost: "
                 f"${self.non_audio_input_cost_usd:.8f}"
@@ -190,24 +209,60 @@ class GeminiUsageCostBreakdown(BaseModel):
 def calculate_gemini_usage_cost(
     usage: GeminiUsageSnapshot,
     config: GeminiConfig,
+    embedded_audio_seconds: float = 0.0,
+    has_embedded_audio: bool = False,
 ) -> GeminiUsageCostBreakdown:
     """
-    Calculates cost from actual tokens returned by Gemini.
+    Calculates cost from Gemini's returned token totals.
 
-    Cached input tokens are currently conservatively included at the normal
-    input rate. ClipFactory does not yet use explicit context caching.
+    Preferred audio-token source:
+    1. Explicit audio modality returned by Gemini.
+    2. Duration-based estimate when audio is embedded in a video but Gemini
+       reports the complete file under the video modality.
+    3. Zero when the request contained no audio.
+
+    Estimated embedded-audio tokens are subtracted from the non-audio input
+    bucket, so they are not counted twice.
     """
 
     tokens_per_million = 1_000_000
 
-    audio_input_tokens = min(
+    reported_audio_tokens = min(
         usage.audio_input_tokens,
         usage.total_input_tokens,
     )
 
+    estimated_embedded_audio_tokens = 0
+    priced_audio_tokens = 0
+    audio_token_source = "none"
+
+    if reported_audio_tokens > 0:
+        priced_audio_tokens = reported_audio_tokens
+        audio_token_source = "reported_audio_modality"
+
+    elif (
+        has_embedded_audio
+        and embedded_audio_seconds > 0
+        and usage.video_input_tokens > 0
+    ):
+        estimated_embedded_audio_tokens = math.ceil(
+            embedded_audio_seconds
+            * config.token_estimation.audio_tokens_per_second
+        )
+
+        priced_audio_tokens = min(
+            estimated_embedded_audio_tokens,
+            usage.video_input_tokens,
+            usage.total_input_tokens,
+        )
+
+        audio_token_source = (
+            "estimated_from_embedded_video_audio"
+        )
+
     non_audio_input_tokens = max(
         0,
-        usage.total_input_tokens - audio_input_tokens,
+        usage.total_input_tokens - priced_audio_tokens,
     )
 
     output_and_thinking_tokens = (
@@ -224,7 +279,7 @@ def calculate_gemini_usage_cost(
     )
 
     audio_input_cost = (
-        audio_input_tokens
+        priced_audio_tokens
         / tokens_per_million
         * pricing.input_audio_per_million_usd
     )
@@ -237,8 +292,15 @@ def calculate_gemini_usage_cost(
 
     return GeminiUsageCostBreakdown(
         non_audio_input_tokens=non_audio_input_tokens,
-        audio_input_tokens=audio_input_tokens,
-        output_and_thinking_tokens=output_and_thinking_tokens,
+        priced_audio_input_tokens=priced_audio_tokens,
+        reported_audio_input_tokens=reported_audio_tokens,
+        estimated_embedded_audio_tokens=(
+            estimated_embedded_audio_tokens
+        ),
+        output_and_thinking_tokens=(
+            output_and_thinking_tokens
+        ),
+        audio_token_source=audio_token_source,
         non_audio_input_cost_usd=non_audio_input_cost,
         audio_input_cost_usd=audio_input_cost,
         output_and_thinking_cost_usd=(
