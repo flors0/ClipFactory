@@ -1,0 +1,121 @@
+name: ClipFactory v1.1.0 Windows verified build
+
+on:
+  push:
+    branches:
+      - codex/v1.1.0-windows-build-20260903
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract verified source checkpoint
+        shell: pwsh
+        run: |
+          Expand-Archive `
+            -Path .codex-build\ClipFactory_v1.1.0_source_checkpoint.zip `
+            -DestinationPath source
+          if (-not (Test-Path source\ClipFactory\pyproject.toml)) {
+            throw "Verified ClipFactory source root was not extracted"
+          }
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.15"
+          enable-cache: true
+          cache-dependency-glob: "source/ClipFactory/uv.lock"
+
+      - name: Install Python, locked dependencies, and FFmpeg
+        shell: pwsh
+        working-directory: source/ClipFactory
+        run: |
+          uv python install 3.12
+          uv sync --group dev --frozen --python 3.12
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue) -or
+              -not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg -y --no-progress
+          }
+          ffmpeg -version | Select-Object -First 1
+          ffprobe -version | Select-Object -First 1
+
+      - name: Full regression suite
+        shell: pwsh
+        working-directory: source/ClipFactory
+        run: |
+          uv run pytest -q
+          uv run ruff check app tests scripts
+          uv run ruff format --check app tests scripts
+          uv run python -m compileall -q app tests scripts
+
+      - name: Windows Qt composition smoke test
+        shell: pwsh
+        working-directory: source/ClipFactory
+        run: uv run python scripts/windows_ui_smoke.py
+
+      - name: Build executable and verify packaged migrations
+        shell: pwsh
+        working-directory: source/ClipFactory
+        run: scripts/build_windows.ps1
+
+      - name: Twelve-second executable GUI launch smoke test
+        shell: pwsh
+        working-directory: source/ClipFactory
+        run: |
+          $Executable = Resolve-Path "dist\ClipFactory\ClipFactory.exe"
+          $Process = Start-Process $Executable -PassThru
+          Start-Sleep -Seconds 12
+          if ($Process.HasExited) {
+            throw "ClipFactory.exe exited during GUI launch smoke test with code $($Process.ExitCode)"
+          }
+          Stop-Process -Id $Process.Id
+
+      - name: Package and re-test the exact delivery ZIP
+        shell: pwsh
+        working-directory: source/ClipFactory
+        run: |
+          Copy-Item README.md dist\ClipFactory\README.txt
+          Compress-Archive `
+            -Path dist\ClipFactory `
+            -DestinationPath ClipFactory_v1.1.0_Windows.zip
+          Expand-Archive ClipFactory_v1.1.0_Windows.zip packaged-smoke
+          $VersionOutput = Join-Path $PWD "packaged-version.txt"
+          $VersionProcess = Start-Process `
+            -FilePath packaged-smoke\ClipFactory\ClipFactory.exe `
+            -ArgumentList @("--version-file", "`"$VersionOutput`"") `
+            -Wait -PassThru
+          if ($VersionProcess.ExitCode -ne 0) {
+            throw "Executable from the finished ZIP failed its version smoke test"
+          }
+          if ((Get-Content $VersionOutput -Raw).Trim() -ne "ClipFactory 1.1.0") {
+            throw "Executable from the finished ZIP reported an unexpected version"
+          }
+          $MigrationDirectory = "packaged-smoke\ClipFactory\_internal\app\storage\migrations"
+          if (-not (Test-Path $MigrationDirectory)) {
+            throw "Finished ZIP does not contain database migrations"
+          }
+          $Forbidden = Get-ChildItem packaged-smoke\ClipFactory -Recurse -Force | Where-Object {
+            $_.Name -in @(".env", ".venv", ".pytest_cache", ".ruff_cache") -or
+            $_.Extension -in @(".db", ".log")
+          }
+          if ($Forbidden) {
+            throw "Forbidden runtime or private files found: $($Forbidden.FullName -join ', ')"
+          }
+          $Hash = (Get-FileHash ClipFactory_v1.1.0_Windows.zip -Algorithm SHA256).Hash.ToLower()
+          Set-Content `
+            -Path ClipFactory_v1.1.0_Windows.sha256 `
+            -Value "$Hash  ClipFactory_v1.1.0_Windows.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ClipFactory-v1.1.0-Windows
+          path: |
+            source/ClipFactory/ClipFactory_v1.1.0_Windows.zip
+            source/ClipFactory/ClipFactory_v1.1.0_Windows.sha256
+          if-no-files-found: error
+          retention-days: 7
