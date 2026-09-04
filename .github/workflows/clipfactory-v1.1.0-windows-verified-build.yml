@@ -56,7 +56,9 @@ jobs:
       - name: Windows Qt composition smoke test
         shell: pwsh
         working-directory: source/ClipFactory
-        run: uv run python scripts/windows_ui_smoke.py
+        run: |
+          $env:PYTHONPATH = (Get-Location).Path
+          uv run python scripts/windows_ui_smoke.py
 
       - name: Build executable and verify packaged migrations
         shell: pwsh
